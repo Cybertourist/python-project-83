@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container-lg mt-3">
+    <h1>Сайты</h1>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover mt-2" data-test="urls">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Имя</th>
+                    <th>Дата добавления</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in urls %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td><a href="/urls/{{ item.id }}">{{ item.name }}</a></td>
+                    <td>{{ item.created_at.strftime('%Y-%m-%d') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
