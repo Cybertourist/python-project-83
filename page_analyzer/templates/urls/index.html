@@ -9,7 +9,8 @@
                 <tr>
                     <th>ID</th>
                     <th>Имя</th>
-                    <th>Дата добавления</th>
+                    <th>Последняя проверка</th>
+                    <th>Код ответа</th>
                 </tr>
             </thead>
             <tbody>
@@ -17,7 +18,8 @@
                 <tr>
                     <td>{{ item.id }}</td>
                     <td><a href="/urls/{{ item.id }}">{{ item.name }}</a></td>
-                    <td>{{ item.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ item.last_check.strftime('%Y-%m-%d') if item.last_check else '' }}</td>
+                    <td>{{ item.status_code or '' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
