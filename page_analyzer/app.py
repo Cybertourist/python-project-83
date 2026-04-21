@@ -2,6 +2,7 @@ import requests
 import os
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
+from bs4 import BeautifulSoup
 from flask import (
     Flask,
     render_template,
@@ -119,6 +120,34 @@ def add_check(id):
             curr.execute(
                 "INSERT INTO url_checks (url_id, status_code, created_at) VALUES (%s, %s, %s)",
                 (id, status_code, datetime.now())
+            )
+            conn.commit()
+            flash('Страница успешно проверена', 'success')
+
+        try:
+            response = requests.get(url_name)
+            response.raise_for_status()
+            status_code = response.status_code
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            h1 = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
+            title = soup.title.string if soup.title else ''
+            
+            description_tag = soup.find('meta', attrs={'name': 'description'})
+            description = description_tag.get('content', '') if description_tag else ''
+
+        except requests.RequestException:
+            flash('Произошла ошибка при проверке', 'danger')
+            return redirect(url_for('show_url', id=id))
+
+        with conn.cursor() as curr:
+            curr.execute(
+                """
+                INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (id, status_code, h1, title, description, datetime.now())
             )
             conn.commit()
             flash('Страница успешно проверена', 'success')
