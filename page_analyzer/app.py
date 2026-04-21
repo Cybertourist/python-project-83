@@ -74,7 +74,8 @@ def post_url():
             id = existing_url.id
         else:
             curr.execute(
-                "INSERT INTO urls (name, created_at) VALUES (%s, %s) RETURNING id",
+                "INSERT INTO urls (name, created_at) VALUES (%s, %s) "
+                "RETURNING id",
                 (normalized_url, datetime.now())
             )
             id = curr.fetchone().id
@@ -95,11 +96,20 @@ def show_url(id):
             if not url_data:
                 return "Page not found", 404
 
-            curr.execute("SELECT * FROM url_checks WHERE url_id = %s ORDER BY id DESC", (id,))
+            curr.execute(
+                "SELECT * FROM url_checks WHERE url_id = %s "
+                "ORDER BY id DESC",
+                (id,)
+            )
             checks = curr.fetchall()
 
     messages = get_flashed_messages(with_categories=True)
-    return render_template('urls/show.html', url=url_data, checks=checks, messages=messages)
+    return render_template(
+        'urls/show.html',
+        url=url_data,
+        checks=checks,
+        messages=messages
+    )
 
 
 @app.post('/urls/<int:id>/checks')
@@ -125,8 +135,8 @@ def add_check(id):
             h1 = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
             title = soup.title.get_text(strip=True) if soup.title else ''
 
-            description_tag = soup.find('meta', attrs={'name': 'description'})
-            description = description_tag.get('content', '').strip() if description_tag else ''
+            desc_tag = soup.find('meta', attrs={'name': 'description'})
+            description = desc_tag.get('content', '').strip() if desc_tag else ''
 
         except requests.RequestException:
             flash('Произошла ошибка при проверке', 'danger')
@@ -135,7 +145,8 @@ def add_check(id):
         with conn.cursor() as curr:
             curr.execute(
                 """
-                INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+                INSERT INTO url_checks
+                (url_id, status_code, h1, title, description, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 """,
                 (id, status_code, h1, title, description, datetime.now())
