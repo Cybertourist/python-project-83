@@ -136,7 +136,8 @@ def add_check(id):
             title = soup.title.get_text(strip=True) if soup.title else ''
 
             desc_tag = soup.find('meta', attrs={'name': 'description'})
-            description = desc_tag.get('content', '').strip() if desc_tag else ''
+            content = desc_tag.get('content', '') if desc_tag else ''
+            description = content.strip()
 
         except requests.RequestException:
             flash('Произошла ошибка при проверке', 'danger')
