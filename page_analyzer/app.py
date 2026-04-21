@@ -34,9 +34,9 @@ def validate(url):
     errors = []
     if not url:
         errors.append("URL обязателен")
-    if len(url) > 255:
+    elif len(url) > 255:
         errors.append("URL превышает 255 символов")
-    if not validators.url(url):
+    elif not validators.url(url):
         errors.append("Некорректный URL")
     return errors
 
@@ -46,7 +46,7 @@ def index():
 
 @app.post('/urls')
 def post_url():
-    url = request.form.get('url')
+    url = request.form.get('url', '')
     errors = validate(url)
     
     if errors:
@@ -59,7 +59,6 @@ def post_url():
     
     conn = get_db_connection()
     with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
-        # Проверяем, существует ли уже такой URL
         curr.execute("SELECT id FROM urls WHERE name = %s", (normalized_url,))
         existing_url = curr.fetchone()
         
@@ -67,7 +66,6 @@ def post_url():
             flash('Страница уже существует', 'info')
             id = existing_url.id
         else:
-            # Вставляем новую запись
             curr.execute(
                 "INSERT INTO urls (name, created_at) VALUES (%s, %s) RETURNING id",
                 (normalized_url, datetime.now())
@@ -109,38 +107,26 @@ def add_check(id):
         url_name = url_data.name
         
         try:
-            response = requests.get(url_name)
-            response.raise_for_status()
-            status_code = response.status_code
-        except requests.RequestException:
-            flash('Произошла ошибка при проверке', 'danger')
-            return redirect(url_for('show_url', id=id))
-            
-        with conn.cursor() as curr:
-            curr.execute(
-                "INSERT INTO url_checks (url_id, status_code, created_at) VALUES (%s, %s, %s)",
-                (id, status_code, datetime.now())
-            )
-            conn.commit()
-            flash('Страница успешно проверена', 'success')
-
-        try:
+            # Делаем запрос к сайту
             response = requests.get(url_name)
             response.raise_for_status()
             status_code = response.status_code
             
+            # Парсим HTML
             soup = BeautifulSoup(response.text, 'html.parser')
             
+            # Извлекаем и жестко чистим данные
             h1 = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
-            title = soup.title.string if soup.title else ''
+            title = soup.title.get_text(strip=True) if soup.title else ''
             
             description_tag = soup.find('meta', attrs={'name': 'description'})
-            description = description_tag.get('content', '') if description_tag else ''
+            description = description_tag.get('content', '').strip() if description_tag else ''
 
         except requests.RequestException:
             flash('Произошла ошибка при проверке', 'danger')
             return redirect(url_for('show_url', id=id))
 
+        # Делаем ОДИН инсерт в базу со всеми собранными данными
         with conn.cursor() as curr:
             curr.execute(
                 """

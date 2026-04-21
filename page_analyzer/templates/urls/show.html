@@ -16,7 +16,7 @@
                 </tr>
                 <tr>
                     <td>Дата создания</td>
-                    <td>{{ url.created_at }}</td>
+                    <td>{{ url.created_at.strftime('%Y-%m-%d') }}</td>
                 </tr>
             </tbody>
         </table>
@@ -44,9 +44,9 @@
                 <tr>
                     <td>{{ check.id }}</td>
                     <td>{{ check.status_code or '' }}</td>
-                    <td>{{ (check.h1 or '') | truncate(200) }}</td>
-                    <td>{{ (check.title or '') | truncate(200) }}</td>
-                    <td>{{ (check.description or '') | truncate(200) }}</td>
+                    <td>{{ (check.h1 or '') | truncate(200, True) }}</td>
+                    <td>{{ (check.title or '') | truncate(200, True) }}</td>
+                    <td>{{ (check.description or '') | truncate(200, True) }}</td>
                     <td>{{ check.created_at.strftime('%Y-%m-%d') }}</td>
                 </tr>
                 {% endfor %}
