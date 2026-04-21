@@ -1,3 +1,4 @@
+import requests
 import os
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
@@ -95,19 +96,35 @@ def show_url(id):
 
 @app.post('/urls/<int:id>/checks')
 def add_check(id):
-    with get_db_connection() as conn:
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
+            curr.execute("SELECT name FROM urls WHERE id = %s", (id,))
+            url_data = curr.fetchone()
+            
+        if not url_data:
+            return "Page not found", 404
+            
+        url_name = url_data.name
+        
+        try:
+            response = requests.get(url_name)
+            response.raise_for_status()
+            status_code = response.status_code
+        except requests.RequestException:
+            flash('Произошла ошибка при проверке', 'danger')
+            return redirect(url_for('show_url', id=id))
+            
         with conn.cursor() as curr:
-            try:
-                curr.execute(
-                    "INSERT INTO url_checks (url_id, created_at) VALUES (%s, %s)",
-                    (id, datetime.now())
-                )
-                conn.commit()
-                flash('Страница успешно проверена', 'success')
-            except psycopg2.Error:
-                conn.rollback()
-                flash('Произошла ошибка при проверке', 'danger')
-                
+            curr.execute(
+                "INSERT INTO url_checks (url_id, status_code, created_at) VALUES (%s, %s, %s)",
+                (id, status_code, datetime.now())
+            )
+            conn.commit()
+            flash('Страница успешно проверена', 'success')
+            
+    finally:
+        conn.close()
     return redirect(url_for('show_url', id=id))
 
 @app.route('/urls')

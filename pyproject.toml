@@ -9,5 +9,6 @@ dependencies = [
     "gunicorn>=21.2.0",
     "psycopg2-binary>=2.9.11",
     "python-dotenv>=1.0.0",
+    "requests>=2.33.1",
     "validators>=0.35.0",
 ]
