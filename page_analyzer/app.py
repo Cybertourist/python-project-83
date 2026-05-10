@@ -1,11 +1,6 @@
 import os
-from datetime import datetime
-from urllib.parse import urlparse
 
-import psycopg2
 import requests
-import validators
-from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -16,34 +11,23 @@ from flask import (
     request,
     url_for,
 )
-from psycopg2.extras import NamedTupleCursor
+
+from page_analyzer.database import (
+    add_check,
+    add_url,
+    get_checks_by_url_id,
+    get_url_by_id,
+    get_url_by_name,
+    get_urls as get_all_urls,
+)
+from page_analyzer.parser import parse_page
+from page_analyzer.url_normalizer import normalize_url, validate
 
 
 load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-DATABASE_URL = os.getenv('DATABASE_URL')
-
-
-def get_db_connection():
-    return psycopg2.connect(DATABASE_URL)
-
-
-def normalize_url(url):
-    parsed_url = urlparse(url)
-    return f"{parsed_url.scheme}://{parsed_url.netloc}"
-
-
-def validate(url):
-    errors = []
-    if not url:
-        errors.append("URL обязателен")
-    elif len(url) > 255:
-        errors.append("URL превышает 255 символов")
-    elif not validators.url(url):
-        errors.append("Некорректный URL")
-    return errors
 
 
 @app.route('/')
@@ -63,47 +47,28 @@ def post_url():
         return render_template('index.html', url=url, messages=messages), 422
 
     normalized_url = normalize_url(url)
+    existing_url = get_url_by_name(normalized_url)
 
-    conn = get_db_connection()
-    with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
-        curr.execute("SELECT id FROM urls WHERE name = %s", (normalized_url,))
-        existing_url = curr.fetchone()
+    if existing_url:
+        flash('Страница уже существует', 'info')
+        url_id = existing_url.id
+    else:
+        url_id = add_url(normalized_url)
+        flash('Страница успешно добавлена', 'success')
 
-        if existing_url:
-            flash('Страница уже существует', 'info')
-            id = existing_url.id
-        else:
-            curr.execute(
-                "INSERT INTO urls (name, created_at) VALUES (%s, %s) "
-                "RETURNING id",
-                (normalized_url, datetime.now())
-            )
-            id = curr.fetchone().id
-            conn.commit()
-            flash('Страница успешно добавлена', 'success')
-
-    conn.close()
-    return redirect(url_for('show_url', id=id))
+    return redirect(url_for('show_url', id=url_id))
 
 
 @app.route('/urls/<int:id>')
 def show_url(id):
-    with get_db_connection() as conn:
-        with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
-            curr.execute("SELECT * FROM urls WHERE id = %s", (id,))
-            url_data = curr.fetchone()
+    url_data = get_url_by_id(id)
 
-            if not url_data:
-                return "Page not found", 404
+    if not url_data:
+        return "Page not found", 404
 
-            curr.execute(
-                "SELECT * FROM url_checks WHERE url_id = %s "
-                "ORDER BY id DESC",
-                (id,)
-            )
-            checks = curr.fetchall()
-
+    checks = get_checks_by_url_id(id)
     messages = get_flashed_messages(with_categories=True)
+
     return render_template(
         'urls/show.html',
         url=url_data,
@@ -113,70 +78,34 @@ def show_url(id):
 
 
 @app.post('/urls/<int:id>/checks')
-def add_check(id):
-    conn = get_db_connection()
+def create_check(id):
+    url_data = get_url_by_id(id)
+
+    if not url_data:
+        return "Page not found", 404
+
     try:
-        with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
-            curr.execute("SELECT name FROM urls WHERE id = %s", (id,))
-            url_data = curr.fetchone()
+        response = requests.get(url_data.name)
+        response.raise_for_status()
+    except requests.RequestException:
+        flash('Произошла ошибка при проверке', 'danger')
+        return redirect(url_for('show_url', id=id))
 
-        if not url_data:
-            return "Page not found", 404
+    parsed_data = parse_page(response.text)
 
-        url_name = url_data.name
+    add_check(
+        id,
+        response.status_code,
+        parsed_data['h1'],
+        parsed_data['title'],
+        parsed_data['description']
+    )
+    flash('Страница успешно проверена', 'success')
 
-        try:
-            response = requests.get(url_name)
-            response.raise_for_status()
-            status_code = response.status_code
-
-            soup = BeautifulSoup(response.text, 'html.parser')
-
-            h1 = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
-            title = soup.title.get_text(strip=True) if soup.title else ''
-
-            desc_tag = soup.find('meta', attrs={'name': 'description'})
-            content = desc_tag.get('content', '') if desc_tag else ''
-            description = content.strip()
-
-        except requests.RequestException:
-            flash('Произошла ошибка при проверке', 'danger')
-            return redirect(url_for('show_url', id=id))
-
-        with conn.cursor() as curr:
-            curr.execute(
-                """
-                INSERT INTO url_checks
-                (url_id, status_code, h1, title, description, created_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (id, status_code, h1, title, description, datetime.now())
-            )
-            conn.commit()
-            flash('Страница успешно проверена', 'success')
-
-    finally:
-        conn.close()
     return redirect(url_for('show_url', id=id))
 
 
 @app.route('/urls')
 def get_urls():
-    with get_db_connection() as conn:
-        with conn.cursor(cursor_factory=NamedTupleCursor) as curr:
-            curr.execute("""
-                SELECT
-                    urls.id,
-                    urls.name,
-                    url_checks.created_at AS last_check,
-                    url_checks.status_code
-                FROM urls
-                LEFT JOIN url_checks ON urls.id = url_checks.url_id
-                AND url_checks.id = (
-                    SELECT MAX(id) FROM url_checks WHERE url_id = urls.id
-                )
-                ORDER BY urls.id DESC
-            """)
-            urls = curr.fetchall()
-
+    urls = get_all_urls()
     return render_template('urls/index.html', urls=urls)
