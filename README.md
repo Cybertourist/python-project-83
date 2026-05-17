@@ -1,5 +1,6 @@
 ### Hexlet tests and linter status:
 [![Actions Status](https://github.com/Cybertourist/python-project-83/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/Cybertourist/python-project-83/actions)
+[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-light.svg)](https://sonarcloud.io/summary/new_code?id=Cybertourist_python-project-83)
 
 
 # Анализатор страниц (Page Analyzer)
