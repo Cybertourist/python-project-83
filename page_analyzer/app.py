@@ -18,11 +18,12 @@ from page_analyzer.database import (
     get_checks_by_url_id,
     get_url_by_id,
     get_url_by_name,
+)
+from page_analyzer.database import (
     get_urls as get_all_urls,
 )
 from page_analyzer.parser import parse_page
 from page_analyzer.url_normalizer import normalize_url, validate
-
 
 load_dotenv()
 
